@@ -78,7 +78,11 @@ Coverage includes literal note boundaries, relative links, invalid/raw fallback,
 Set `COGITATUM_SCREENSHOT_DIR` to retain browser screenshots.
 This harness is not the Obsidian app and does not establish native desktop or mobile behavior.
 Historical native checks from the former integration do not validate this standalone release bundle.
+Those checks used Obsidian 1.12.7 on 2026-10-23 with `main.js` SHA-256 `783666622d48c7d485dd9729124345175932088a9dde1fb56179baa6be9ebbf5`.
+They verified indented Live Preview rendering, exact local-use selection in Live Preview and Reading, empty-fence editing, and Reading-to-Map-to-Expand-to-Edit navigation against that earlier bundle.
+They did not establish the current native Markdown hook, exact CRLF selection throughout, focus-race handling, or mobile-device behavior.
 Install/reload and validate the exact release artifact in the real host before claiming that coverage.
+Record new native results and exact artifact hashes outside tracked source, such as ignored `artifacts/` files or a pull request description, so recording evidence does not change the build identity.
 
 ## License
 
