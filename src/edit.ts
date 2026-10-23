@@ -37,7 +37,7 @@ export function ownerLeaf(app: App, container: HTMLElement): WorkspaceLeaf | und
 
 /** Reuse one native source pane: Obsidian owns the buffer, IME, undo and persistence. */
 export async function editSource(app: App, container: HTMLElement, context: MarkdownPostProcessorContext, request: BlockEditRequest): Promise<void> {
-  if (request.signal.aborted) return;
+  if (request.signal.aborted || !container.isConnected) return;
   const { source, sourceSpan: span, signal } = request;
   const section = context.getSectionInfo(container);
   if (!section) throw new Error("This preview has no editable source location. Open its original note to edit it.");
@@ -52,26 +52,37 @@ export async function editSource(app: App, container: HTMLElement, context: Mark
   if (!editorLeaf) {
     const direction = container.ownerDocument.defaultView!.innerWidth < 800 ? "horizontal" : "vertical";
     editorLeaf = owner ? app.workspace.createLeafBySplit(owner, direction) : app.workspace.getLeaf("split", direction);
+    if (signal.aborted || !container.isConnected) return;
     await editorLeaf.setViewState({ type: "markdown", state: { file: path, mode: "source", source: true }, active: false });
   }
   if (signal.aborted) return;
   const view = editorLeaf.view;
+  const nativeEditor = view instanceof MarkdownView ? view.editor : undefined;
   const validateTarget = () => {
-    if (!(view instanceof MarkdownView) || editorLeaf.view !== view || view.file?.path !== path || view.getMode() !== "source") {
+    if (signal.aborted || !container.isConnected) return;
+    if (!(view instanceof MarkdownView) || !nativeEditor || view.editor !== nativeEditor
+      || !app.workspace.getLeavesOfType("markdown").includes(editorLeaf)
+      || editorLeaf.view !== view || view.file?.path !== path || view.getMode() !== "source") {
       throw new Error("Obsidian could not keep the requested note open in the source editor.");
     }
-    return { editor: view.editor, range: sourceRange(view.editor.getValue(), source, section.lineStart, span) };
+    return { editor: nativeEditor, range: sourceRange(nativeEditor.getValue(), source, section.lineStart, span) };
   };
-  validateTarget();
+  if (!validateTarget()) return;
   app.workspace.setActiveLeaf(editorLeaf, { focus: true });
-  // Native focus callbacks can unload this preview, navigate the pane, or edit the note.
-  if (signal.aborted) return;
-  const { editor, range } = validateTarget();
-  const cursor = editor.getCursor();
+  // Each native callback can unload the preview, replace its editor, or change the source.
+  const active = validateTarget();
+  if (!active) return;
+  const cursor = active.editor.getCursor();
+  const current = validateTarget();
+  if (!current) return;
+  const { editor, range } = current;
   // Re-entering an existing editor preserves work in this fence, including its selection.
   if (span || !reused || cursor.line < range.firstLine || cursor.line > range.lastLine) {
     editor.setSelection(range.from, range.to);
-    editor.scrollIntoView(range, true);
+    const selected = validateTarget();
+    if (!selected) return;
+    editor.scrollIntoView(selected.range, true);
   }
+  if (!validateTarget()) return;
   editor.focus();
 }

@@ -94,9 +94,13 @@ try {
       constructor(container, path, mode = 'preview') { this.containerEl = container; this.file = { path }; this.mode = mode;
         this.editor = {
           getValue: () => window.notes.get(this.file.path),
-          getCursor: () => this.cursor ?? { line: 0, ch: 0 },
-          setSelection: (from, to) => { this.cursor = from; window.editorEvents.push({ path: this.file.path, from, to }); },
-          scrollIntoView: () => window.editorActions.push('scroll'), focus: () => window.editorActions.push('focus')
+          getCursor: () => { window.onEditorAction?.('cursor', this); return this.cursor ?? { line: 0, ch: 0 }; },
+          setSelection: (from, to) => {
+            this.cursor = from; window.editorEvents.push({ path: this.file.path, from, to });
+            window.onEditorAction?.('selection', this);
+          },
+          scrollIntoView: () => { window.editorActions.push('scroll'); window.onEditorAction?.('scroll', this); },
+          focus: () => window.editorActions.push('focus')
         };
       }
       getMode() { return this.mode; }
@@ -533,6 +537,44 @@ try {
     await page.evaluate(id => { window.afterOpen = undefined; window.onActivate = undefined; window.unmount(id); }, scenario);
   }
 
+  // Simulated synchronous native callbacks must stop subsequent editor mutations.
+  for (const boundary of ['selection', 'scroll', 'cursor']) {
+    for (const invalidation of ['unload', 'source', 'file', 'editor', 'view', 'closed-leaf']) {
+      const id = `${boundary}-${invalidation}`;
+      const before = await page.evaluate(({ id, boundary, invalidation, source }) => {
+        window.mount(id, source);
+        window.notes.set('other.md', window.notes.get(`${id}.md`));
+        window.editorBoundaryCalls = 0;
+        window.onEditorAction = (action, view) => {
+          if (action !== boundary) return;
+          window.editorBoundaryCalls++;
+          window.onEditorAction = undefined;
+          if (invalidation === 'unload') window.children.get(id).unload();
+          if (invalidation === 'source') window.notes.set(`${id}.md`, 'Changed note.');
+          if (invalidation === 'file') view.file = { path: 'other.md' };
+          if (invalidation === 'editor') view.editor = { ...view.editor };
+          const leaf = window.leaves.find(leaf => leaf.view === view);
+          if (invalidation === 'view') leaf.view = { ...view };
+          if (invalidation === 'closed-leaf') window.leaves = window.leaves.filter(candidate => candidate !== leaf);
+        };
+        return { selections: window.editorEvents.length, actions: window.editorActions.length };
+      }, { id, boundary, invalidation, source: cjk });
+      const block = page.locator(`#${id}`);
+      await block.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.waitForFunction(() => window.editorBoundaryCalls === 1);
+      if (invalidation === 'unload') {
+        assert.equal(await page.evaluate(id => window.children.get(id).loaded, id), false);
+      } else {
+        await block.getByRole('status').waitFor({ state: 'visible' });
+        assert.match(await block.getByRole('status').textContent(), invalidation === 'source' ? /source changed/i : /source editor/i);
+      }
+      await frames();
+      assert.equal(await page.evaluate(() => window.editorEvents.length), before.selections + (boundary === 'cursor' ? 0 : 1), `${id}: do not select after invalidation`);
+      assert.deepEqual(await page.evaluate(start => window.editorActions.slice(start), before.actions), boundary === 'scroll' ? ['scroll'] : [], `${id}: no later scroll or focus after a native callback invalidates the request`);
+      await page.evaluate(id => { window.onEditorAction = undefined; window.unmount(id); }, id);
+    }
+  }
+
   // Requests in separate blocks serialize creation without silently dropping the later edit.
   await page.evaluate(source => { window.mount('queue-a', source); window.mount('queue-b', source); window.holdOpen = true; window.releaseOpen = undefined; }, cjk);
   await page.locator('#queue-a').getByRole('button', { name: 'Edit', exact: true }).click();
@@ -647,5 +689,5 @@ try {
   assert.equal(await page.evaluate(() => window.observers.size), 0);
   assert.equal(await page.locator('#ordinary').textContent(), 'Ordinary Markdown remains host-owned.');
   assert.deepEqual(errors, []);
-  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map, native editing and focus cancellation, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, pointer/settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
+  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map, native editing and focus cancellation, 18 simulated cursor/selection/scroll invalidation cases, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, pointer/settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
 } finally { await browser.close(); }

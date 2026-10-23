@@ -74,7 +74,7 @@ The package is not published to npm or the Obsidian Community directory.
 
 The browser harness exercises the production bundle with real Core/View and a stand-in for Obsidian registration, native Markdown delegation, editor focus and render-child lifecycle.
 Its copied fixture lives in `tests/fixtures`; tests require no website or private workspace.
-Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map, expanded editing, queued/cancelled focus, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
+Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
 Set `COGITATUM_SCREENSHOT_DIR` to retain browser screenshots.
 This harness is not the Obsidian app and does not establish native desktop or mobile behavior.
 Historical native checks from the former integration do not validate this standalone release bundle.
