@@ -1,0 +1,36 @@
+{
+  "name": "@cogitatum/obsidian",
+  "version": "0.1.0-alpha.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "node build-metadata.mjs && npm run typecheck",
+    "build": "node build.mjs",
+    "test:browser": "npm run build -- --production && node tests/host.browser.mjs",
+    "release": "npm run check && npm run test:browser && node release.mjs"
+  },
+  "dependencies": {
+    "@cogitatum/core": "file:vendor/cogitatum-core-0.5.0.tgz",
+    "@cogitatum/view": "file:vendor/cogitatum-view-0.5.0.tgz"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.8.3",
+    "playwright": "1.61.1"
+  },
+  "license": "MIT",
+  "description": "Read explicit Cogitatum code blocks in Obsidian with native Markdown and source navigation.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "cogitatumSource": {
+    "repository": "BaksiLi/cogitatum",
+    "ref": "b82d3a0939b9c3cb461215a937b88155e2ef8200",
+    "sha256": {
+      "core": "6d84c176167658072167bcff552d7d5fdfe2402384e7a95cce641ef71301c769",
+      "view": "18eba8db317cff3b5328db64c379c12edd76c10caca2054667638445aaf804ca"
+    }
+  }
+}

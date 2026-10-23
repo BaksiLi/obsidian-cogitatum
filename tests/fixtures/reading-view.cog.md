@@ -1,0 +1,12 @@
+- [C @excused] Nora is not responsible for the act.
+  - [linked; @excuse-route]
+    - [G @rule] Responsibility requires the ability to act otherwise.
+    - [G @unable] Nora could not have acted otherwise.
+- [C use @rule] Here we examine this condition rather than assume it.
+  - [G @reason; @defence-route] A person without alternatives cannot choose otherwise.
+    - [O/ @route-objection] This describes choice, but does not establish a necessary condition of responsibility.
+  - [O @point-objection] Some actions express an agent's own intentions even if alternatives are blocked.
+- [. use @rule] The necessity of this condition remains a question for discussion.
+- [Q @q] What makes a person responsible?
+- [. use @q] We refer back to the question without adopting a local role.
+- [Q use @q] We raise the question again here.
