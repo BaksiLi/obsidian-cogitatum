@@ -1,5 +1,7 @@
 # Cogitatum for Obsidian
 
+[Cogitatum website and documentation](https://cogitatum.onesimos.net)
+
 This standalone alpha renders explicit `cog` and `cogitatum` code blocks in Obsidian.
 Reading presents the original occurrences through the shared `@cogitatum/view` renderer.
 Compiler-selected prose uses Obsidian's native Markdown renderer, with the note path retained for links.

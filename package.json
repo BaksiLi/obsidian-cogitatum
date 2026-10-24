@@ -2,6 +2,7 @@
   "name": "@cogitatum/obsidian",
   "version": "0.1.0-alpha.2",
   "private": true,
+  "homepage": "https://cogitatum.onesimos.net",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
