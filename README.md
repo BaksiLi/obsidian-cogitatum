@@ -62,9 +62,22 @@ Package versions alone do not identify development builds; both archives can rem
 Version details in the plugin expose the public pin and available standalone Git revision.
 A source archive builds without Git metadata and is labelled accordingly; retain the release ZIP digest when identifying a tested artifact.
 
-The mark in `assets/cogitatum.svg` is a byte-for-byte snapshot of the accepted Cogitatum geometry.
-Build embeds it as a data URL; shared Block renders it as a decorative mask inheriting the Obsidian theme's ink.
-The build never reads a website asset or a private version script.
+The approved Cog mark in `assets/cog-mark.svg` is the single local source for the Reading/Map toolbar mark.
+`build-metadata.mjs` selects this asset and embeds it as a data URL; `src/main.ts` passes it to shared Block.
+Shared Block renders a decorative, filled mask in the Obsidian theme's current ink, including dark themes and narrow panes.
+Keep the SVG's `viewBox` and `fill="currentColor"`; do not turn it into a stroked toolbar glyph or hard-code a colour.
+The build reads only this local snapshot and needs no website checkout, private version script or runtime setting.
+
+To sync a newly approved designer export, set the source directory and copy the SVG without altering it:
+
+```sh
+COG_BRAND_DIR=/path/to/approved/brand
+cp "$COG_BRAND_DIR/cog-mark.svg" assets/cog-mark.svg
+npm run release
+```
+
+Commit the asset with any integration changes, then run `npm run release` again to identify the clean host revision in the final artifact.
+The designer's square PNG is for plugin listings; this adapter's toolbar uses the theme-aware SVG.
 
 ## Local installation and evidence
 

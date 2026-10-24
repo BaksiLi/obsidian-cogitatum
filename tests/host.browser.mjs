@@ -636,9 +636,11 @@ try {
   assert.equal(await ground.getAttribute('transform'), samples.at(-1), 'Reduced motion should reach the same final layout');
   await page.evaluate(() => document.body.classList.add('theme-dark'));
   assert.equal(await chinese.locator('.cog-graph').evaluate(el => getComputedStyle(el).getPropertyValue('--cog-ink').trim()), '#e6e3d8');
+  assert.equal(await chinese.locator('.cog-block-logo').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(230, 227, 216)', 'The filled Cog mark follows dark host ink');
   if (shots) await page.screenshot({ path: `${shots}/obsidian-map-dark.png` });
   await page.setViewportSize({ width: 360, height: 800 });
   await frames();
+  assert.equal(await chinese.locator('.cog-block-logo').isVisible(), true, 'The Cog mark remains visible on a narrow dark viewport');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await chinese.getByRole('button', { name: 'Reading', exact: true }).click();
   if (shots) await page.screenshot({ path: `${shots}/obsidian-mobile.png` });
