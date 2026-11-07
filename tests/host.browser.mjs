@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { explainSource } from '@cogitatum/core';
+import { explainSource, FORMAT_VERSION } from '@cogitatum/core';
 import { projectReading } from '@cogitatum/view';
 import { version as expectedVersion, logo } from '../build-metadata.mjs';
 
@@ -14,7 +14,9 @@ assert.equal(json('../dist/manifest.json').version, pluginVersion);
 const bundle = readFileSync(new URL('../dist/main.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../dist/styles.css', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./fixtures/reading-view.cog.md', import.meta.url), 'utf8');
-const cjk = '- [C] 9 不是素數。\n  - [linked]\n    - [G] 素數是大於 1，且正因數只有 1 和自身的自然數。\n    - [G] 9 可以被 3 整除，而 3 既不是 1，也不是 9。\n';
+const cjk = '- [C] 9 不是素數。\n  - [_ +> ^]\n    - [.] 素數是大於 1，且正因數只有 1 和自身的自然數。\n    - [.] 9 可以被 3 整除，而 3 既不是 1，也不是 9。\n';
+assert.equal(FORMAT_VERSION, '0.6.0');
+for (const fixture of [source, cjk]) assert.deepEqual(explainSource(fixture, 'document').diagnostics, []);
 const shots = process.env.COGITATUM_SCREENSHOT_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
 const browser = await chromium.launch({ headless: true });
@@ -192,7 +194,7 @@ try {
   assert.notEqual(await nativeRow.getAttribute('data-selected'), 'true', 'Keyboard links do not select Cogitatum occurrences');
   assert.equal(await page.evaluate(() => window.editorEvents.length), editsBeforeLink, 'Links do not navigate the native source editor');
   await nativeRow.focus(); await nativeRow.press('Space');
-  await native.getByRole('button', { name: 'Map', exact: true }).click(); await frames();
+  await native.getByRole('tab', { name: 'Map', exact: true }).click(); await frames();
   assert.equal(await native.locator('.cog-graph .point').count(), 2, 'Only the real Claim and partial invalid Ground exist; the note constructs no Point');
   assert.equal(await native.locator('.cog-block-detail-heading').textContent(), 'Claim @native');
   assert.equal(await native.locator('.cog-block-detail-text strong').textContent(), 'Native');
@@ -346,7 +348,7 @@ try {
   // A local use survives a Map round trip, including its exact source location.
   const localUse = first.locator('.cog-reading-row[data-line="9"]');
   await localUse.click();
-  await first.getByRole('button', { name: 'Map', exact: true }).click();
+  await first.getByRole('tab', { name: 'Map', exact: true }).click();
   await frames();
   assert.equal(await first.locator('.cog-graph').evaluate(el => getComputedStyle(el).pointerEvents), 'auto');
   assert.match(await first.locator('.cog-block-detail-text').textContent(), /Responsibility requires/);
@@ -355,6 +357,15 @@ try {
   await localUse.press('Enter');
   await page.waitForFunction(() => window.editorEvents.length === 1);
   assert.equal(await page.evaluate(() => window.editorEvents.at(-1).from.line), 11);
+  await first.getByRole('tab', { name: 'Strands', exact: true }).click();
+  await frames();
+  const strandSelection = first.locator('.cog-strands-row[data-selected="true"]');
+  assert.equal(await strandSelection.count(), 1);
+  await strandSelection.press('Enter');
+  await page.waitForFunction(() => window.editorEvents.length === 2);
+  assert.equal(await page.evaluate(() => window.editorEvents.at(-1).from.line), 11);
+  await first.getByRole('tab', { name: 'Read', exact: true }).click();
+  assert.equal(await localUse.getAttribute('data-selected'), 'true');
   await first.getByRole('button', { name: 'Edit' }).click();
   assert.equal(await page.evaluate(() => window.leaves.filter(l => l.view.getMode() === 'source').length), 1, 'Editing must reuse the native pane');
   assert.equal(await page.evaluate(() => window.viewStates), 1, 'Reuse must not reset native view state');
@@ -365,10 +376,15 @@ try {
   });
   await first.getByRole('button', { name: 'Edit', exact: true }).click();
   assert.equal(await page.evaluate(() => window.editorEvents.length), caretEdits, 'Edit without a selected passage preserves a cursor inside this fence');
-  await first.getByRole('button', { name: 'Map', exact: true }).click();
+  await first.getByRole('tab', { name: 'Map', exact: true }).click();
   await page.evaluate(source => window.rerender('first', source), source);
   await frames();
-  assert.equal(await first.getByRole('button', { name: 'Map', exact: true }).getAttribute('aria-pressed'), 'true', 'Host rerender must keep the preview in Map');
+  assert.equal(await first.getByRole('tab', { name: 'Map', exact: true }).getAttribute('aria-selected'), 'true', 'Host rerender must keep the preview in Map');
+  await first.getByRole('tab', { name: 'Strands', exact: true }).click();
+  await page.evaluate(source => window.rerender('first', source), source);
+  await frames();
+  assert.equal(await first.getByRole('tab', { name: 'Strands', exact: true }).getAttribute('aria-selected'), 'true');
+  await first.getByRole('tab', { name: 'Map', exact: true }).click();
 
   // Expansion moves the same view; editing returns it before source lookup and focus.
   const graphElement = await first.locator('.cog-graph').elementHandle();
@@ -377,13 +393,13 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Edit', exact: true }).click();
   assert.equal(await page.locator('dialog').count(), 0);
   assert.equal(await graphElement.evaluate(el => el.isConnected && !el.closest('dialog')), true);
-  assert.equal(await first.getByRole('button', { name: 'Map', exact: true }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await first.getByRole('tab', { name: 'Map', exact: true }).getAttribute('aria-selected'), 'true');
 
   // Distinct code blocks may reuse the same names; IDs and selection remain independent.
   await page.evaluate(source => window.mount('second', source, 'cogitatum'), source);
   const second = page.locator('#second');
-  await second.getByRole('button', { name: 'Map', exact: true }).click();
-  await first.getByRole('button', { name: 'Map', exact: true }).click();
+  await second.getByRole('tab', { name: 'Map', exact: true }).click();
+  await first.getByRole('tab', { name: 'Map', exact: true }).click();
   await frames();
   assert.equal(await page.evaluate(() => {
     const ids = [...document.querySelectorAll('.cog-graph [id]')].map(el => el.id);
@@ -399,7 +415,8 @@ try {
   const localSource = [
     '- [C @shared] Shared \u{1f600} wording.',
     '- [C @claim] Claim.',
-    '  - [G use @shared; @route] Local \u{1f600} \u2028 qualification.'
+    '  - [G use @shared; @route] Local \u{1f600} \u2028 qualification.',
+    '    Continued local wording.'
   ].join('\n');
   for (const { id, callbackSource, info, indent = '', fence = '```', eol = '\n', rawCallback = false } of [
     { id: 'metadata', callbackSource: localSource, info: 'cog title="example"' },
@@ -441,8 +458,10 @@ try {
       from: { line: span.startLine + 2, ch: indent.length + span.startColumn - 1 },
       to: { line: span.endLine + 2, ch: indent.length + span.endColumn - 1 }
     }, `${id}: exact local Reading span, with host indentation restored`);
-    const selectedText = note.split(/\r\n|\n/)[selection.from.line].slice(selection.from.ch, selection.to.ch);
-    assert.equal(selectedText, callbackSource.split(/\r\n|\n/)[span.startLine - 1].slice(span.startColumn - 1, span.endColumn - 1));
+    const selectedText = note.split(/\r\n|\n/).slice(selection.from.line, selection.to.line + 1)
+      .map((line, index, lines) => line.slice(index === 0 ? selection.from.ch : indent.length,
+        index === lines.length - 1 ? selection.to.ch : undefined)).join('\n');
+    assert.equal(selectedText, localSource.slice(localSource.indexOf('[G use')));
     assert.match(selectedText, /Local \u{1f600} \u2028 qualification\./u, 'UTF-16 columns must retain the complete authored prose');
     if (callbackSource.endsWith(eol)) {
       await page.evaluate(({ id, note }) => window.notes.set(`${id}.md`, note), {
@@ -490,7 +509,7 @@ try {
     note: '# Title\n\n```cog\n```\n', lineEnd: 3
   }));
   const nativeEmpty = page.locator('#native-empty');
-  assert.equal(await nativeEmpty.getByRole('button', { name: 'Map', exact: true }).isDisabled(), true);
+  assert.equal(await nativeEmpty.getByRole('tab', { name: 'Map', exact: true }).isDisabled(), true);
   await nativeEmpty.getByRole('button', { name: 'Edit', exact: true }).click();
   assert.equal(await nativeEmpty.getByRole('status').isVisible(), false);
   assert.deepEqual(await page.evaluate(() => window.editorEvents.at(-1)), {
@@ -597,7 +616,7 @@ try {
     await Promise.allSettled(element.getAnimations({ subtree: true }).map(animation => animation.finished));
   });
   if (shots) await page.screenshot({ path: `${shots}/obsidian-reading.png` });
-  await chinese.getByRole('button', { name: 'Map', exact: true }).click();
+  await chinese.getByRole('tab', { name: 'Map', exact: true }).click();
   await frames();
   const ground = chinese.locator('.cog-graph .point').nth(1);
   const label = await ground.locator('.cog-text').boundingBox();
@@ -605,6 +624,8 @@ try {
   await page.mouse.click(at.x, at.y);
   assert.equal(await ground.getAttribute('aria-pressed'), 'true');
   const before = await ground.getAttribute('transform');
+  const claim = chinese.locator('.cog-graph .point').first();
+  const claimBefore = await claim.getAttribute('transform');
   await page.mouse.move(at.x, at.y);
   await page.mouse.down();
   await page.mouse.move(at.x + 60, at.y - 25, { steps: 8 });
@@ -612,16 +633,28 @@ try {
   await page.mouse.up();
   assert.notEqual(await ground.getAttribute('transform'), before);
   const heldPosition = await ground.getAttribute('transform');
-  const claim = chinese.locator('.cog-graph .point').first();
-  const settling = await claim.evaluate(node => new Promise(resolve => {
+  const sampleClaim = () => claim.evaluate(node => new Promise(resolve => {
     const values = []; const start = performance.now();
     function sample() { values.push(node.getAttribute('transform')); if (performance.now() - start < 1100) requestAnimationFrame(sample); else resolve(values); }
     requestAnimationFrame(sample);
   }));
-  assert.ok(new Set(settling).size > 3, 'Attraction should continue through the joint after release');
-  assert.equal(new Set(settling.slice(-5)).size, 1, 'Settling must stop');
+  const plainDrag = await sampleClaim();
+  assert.ok(plainDrag.every(position => position === claimBefore), 'A plain drag leaves the target Point fixed');
   assert.equal(await ground.getAttribute('transform'), heldPosition, 'The released mark stays where it was placed');
-  await chinese.getByRole('button', { name: 'Arrange', exact: true }).click();
+  const shiftedLabel = await ground.locator('.cog-text').boundingBox();
+  const shiftedAt = { x: shiftedLabel.x + shiftedLabel.width / 2, y: shiftedLabel.y + shiftedLabel.height / 2 };
+  await page.keyboard.down('Shift');
+  await page.mouse.move(shiftedAt.x, shiftedAt.y);
+  await page.mouse.down();
+  await page.mouse.move(shiftedAt.x + 60, shiftedAt.y - 25, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  const shiftedPosition = await ground.getAttribute('transform');
+  const settling = await sampleClaim();
+  assert.notEqual(settling.at(-1), claimBefore, 'Shift-drag pulls the joint step target');
+  assert.equal(new Set(settling.slice(-5)).size, 1, 'Settling must stop');
+  assert.equal(await ground.getAttribute('transform'), shiftedPosition, 'Shift-drag keeps the released mark in place');
+  await chinese.getByRole('button', { name: 'Arrange map', exact: true }).click();
   const samples = await ground.evaluate(node => new Promise(resolve => {
     const values = []; const start = performance.now();
     function sample() { values.push(node.getAttribute('transform')); if (performance.now() - start < 500) requestAnimationFrame(sample); else resolve(values); }
@@ -631,7 +664,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await ground.focus();
   await ground.press('Alt+ArrowRight');
-  await chinese.getByRole('button', { name: 'Arrange', exact: true }).click();
+  await chinese.getByRole('button', { name: 'Arrange map', exact: true }).click();
   await frames();
   assert.equal(await ground.getAttribute('transform'), samples.at(-1), 'Reduced motion should reach the same final layout');
   await page.evaluate(() => document.body.classList.add('theme-dark'));
@@ -642,7 +675,7 @@ try {
   await frames();
   assert.equal(await chinese.locator('.cog-block-logo').isVisible(), true, 'The Cog mark remains visible on a narrow dark viewport');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await chinese.getByRole('button', { name: 'Reading', exact: true }).click();
+  await chinese.getByRole('tab', { name: 'Read', exact: true }).click();
   if (shots) await page.screenshot({ path: `${shots}/obsidian-mobile.png` });
   await page.evaluate(() => window.unmount('chinese'));
 
@@ -673,7 +706,7 @@ try {
   assert.equal(await page.evaluate(() => window.editorEvents.length), editsBefore, 'Diagnostic Source also rejects a stale native fence');
   await page.evaluate(() => window.unmount('broken'));
   await page.evaluate(() => window.mount('empty', ''));
-  assert.equal(await page.locator('#empty').getByRole('button', { name: 'Map', exact: true }).isDisabled(), true);
+  assert.equal(await page.locator('#empty').getByRole('tab', { name: 'Map', exact: true }).isDisabled(), true);
 
   // A second document models a popout's DOM realm. Disabling the plugin must clean it too.
   await page.evaluate(({ source, styles }) => {
@@ -683,7 +716,7 @@ try {
     window.mount('popout', source, 'cog', doc.body);
   }, { source: cjk, styles });
   const popout = page.frameLocator('iframe');
-  await popout.getByRole('button', { name: 'Map', exact: true }).click();
+  await popout.getByRole('tab', { name: 'Map', exact: true }).click();
   assert.equal(await popout.locator('.cog-graph').count(), 1);
   await page.evaluate(() => window.plugin.unload());
   assert.equal(await page.locator('.cog-block').count(), 0);
@@ -691,5 +724,5 @@ try {
   assert.equal(await page.evaluate(() => window.observers.size), 0);
   assert.equal(await page.locator('#ordinary').textContent(), 'Ordinary Markdown remains host-owned.');
   assert.deepEqual(errors, []);
-  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map, native editing and focus cancellation, 18 simulated cursor/selection/scroll invalidation cases, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, pointer/settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
+  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map/Strands, native editing and focus cancellation, 18 simulated cursor/selection/scroll invalidation cases, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, plain/Shift dragging and settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
 } finally { await browser.close(); }

@@ -2,11 +2,11 @@
 .cog-obsidian {
   --cog-surface: var(--background-primary);
   --cog-canvas: var(--background-secondary);
-  --cog-bearing-surface: var(--background-secondary);
   --cog-ink: var(--text-normal);
+  --cog-ui: var(--font-interface, system-ui, sans-serif);
+  --cog-mono: var(--font-monospace, ui-monospace, Menlo, monospace);
   --cog-muted: var(--text-muted);
   --cog-line: var(--background-modifier-border);
-  --cog-accent: var(--interactive-accent);
   --cog-focus: var(--interactive-accent);
   --cog-support: var(--color-green);
   --cog-objection: var(--color-red);

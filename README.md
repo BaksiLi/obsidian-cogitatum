@@ -1,12 +1,14 @@
 # Cogitatum for Obsidian
 
-[Cogitatum website and documentation](https://cogitatum.onesimos.net)
+[Cogitatum website and documentation](https://onesimos.org)
 
 This standalone alpha renders explicit `cog` and `cogitatum` code blocks in Obsidian.
 Reading presents the original occurrences through the shared `@cogitatum/view` renderer.
 Compiler-selected prose uses Obsidian's native Markdown renderer, with the note path retained for links.
 Replacing a render cancels its component and disposes resources registered by late native postprocessors.
 Map opens on demand with Fit, zoom and Arrange controls; selecting a mark or its wording reveals the full text.
+Strands follows the supporting paths into a Point and places objections on the Point or step they address.
+All three modes share the selected source occurrence, including a local use of a shared Point.
 Read passage returns to the current local occurrence, including a reuse of an earlier Point.
 Edit opens or reuses a native source pane in the same window, beside the preview on wide windows and below it on narrow windows.
 Enter on a Reading occurrence or Map mark selects its exact source range there, retaining a local reuse when selected.
@@ -34,14 +36,24 @@ Expand uses the same live views; editing exits the modal before focusing the nat
 Each Markdown render child owns one immutable source revision and destroys its views when Obsidian replaces it.
 Disabling the plugin also releases views in notes that remain open.
 No source or selection identifiers are persisted between compilations.
-Only the Reading/Map preference is remembered for a pane and fence start line; moving a fence may reset that preference.
-Shared Map motion follows the connected component with damped attraction and repulsion, stops within 900 ms of the last movement, and respects earlier manual placements and reduced motion.
+Only the Reading/Map/Strands preference is remembered for a pane and fence start line; moving a fence may reset that preference.
+Shared Map motion adjusts the held mark's own junctions.
+Shift also pulls that step's other endpoints, without moving further neighbours.
+Snapping guides align marks; Alt places them freely, and reduced motion keeps neighbours still.
 
 ## Build and test
 
 Requires Node.js 22.12 or newer and npm.
 Core and View are vendored MIT-licensed tarballs; no sibling checkout or private workspace is needed.
-The adapter is versioned independently: Obsidian plugin `0.1.0-alpha.2` uses Core, View and Format `0.5.0`.
+The adapter is versioned independently: Obsidian plugin `0.1.0-alpha.4` uses Core and View `0.6.1` with Format `0.6.0`.
+Core and View are vendored from the reviewed public source commit recorded in `package.json`; no registry lookup is needed to build.
+This adopts the same shared rendering and interaction implementation used by the Playground.
+
+Retained 0.5 notes require source migration before recompilation.
+Replace `[linked]` with `[_ +> ^]` and make its direct sources neutral declarations or uses.
+Replace `/>` with `-> ^/` when challenging the locally exposed step, and named `repliesTo` with `respondsTo`.
+A Claim below a Question needs an explicit `answers` clause when it is intended as an answer.
+See the [complete migration reference](https://onesimos.org/docs/syntax#from-published-05); the adapter never rewrites notes automatically.
 
 ```sh
 npm ci
@@ -54,13 +66,13 @@ npm run release
 
 `check` validates local package/manifest identity, the public source pin, archive checksums and installed lockfile integrity, then typechecks the adapter.
 `test:browser` builds the production bundle before running the browser harness.
-`release` repeats those checks and creates `releases/cogitatum-0.1.0-alpha.2.zip` with `main.js`, `styles.css`, `manifest.json` and `LICENSE` at its root.
+`release` repeats those checks and creates `releases/cogitatum-0.1.0-alpha.4.zip` with `main.js`, `styles.css`, `manifest.json` and `LICENSE` at its root.
 Creating the ZIP requires the `zip` command (included with macOS; install it separately on Linux if needed).
 No command installs the plugin into a vault, publishes a release or modifies notes.
 
 The public Core/View commit and SHA-256 archive digests live in `package.json` under `cogitatumSource`.
 When updating the archives, update that pin and both digests together, then regenerate the lockfile and run `npm ci` before checking.
-Package versions alone do not identify development builds; both archives can remain `0.5.0` across distinct source commits.
+Package versions alone do not identify development builds; both archives can retain a version across distinct source commits.
 Version details in the plugin expose the public pin and available standalone Git revision.
 A source archive builds without Git metadata and is labelled accordingly; retain the release ZIP digest when identifying a tested artifact.
 
@@ -89,7 +101,7 @@ The package is not published to npm or the Obsidian Community directory.
 
 The browser harness exercises the production bundle with real Core/View and a stand-in for Obsidian registration, native Markdown delegation, editor focus and render-child lifecycle.
 Its copied fixture lives in `tests/fixtures`; tests require no website or private workspace.
-Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
+Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map/Strands, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
 Set `COGITATUM_SCREENSHOT_DIR` to retain browser screenshots.
 This harness is not the Obsidian app and does not establish native desktop or mobile behavior.
 Historical native checks from the former integration do not validate this standalone release bundle.
