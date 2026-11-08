@@ -33,6 +33,7 @@ The adapter owns theme variables, native source navigation and Obsidian render-c
 Edit reuses an existing source pane without resetting its view state, and preserves the cursor when it is already inside the current fence and no passage is selected.
 In source editors, `cog` fences are colored by Core's lexical tokens through the theme's own syntax classes; Grounds and Objections take the Map's stance colors.
 Moving the cursor inside a fence selects that line's occurrence in the same note's open previews, without taking focus.
+A preview rebuilt by an edit starts on the cursor's line, and only a preview of that very source revision follows it.
 A replaced or destroyed preview cancels its pending navigation before it can select or focus stale source.
 Expand uses the same live views; editing exits the modal before focusing the native editor.
 Each Markdown render child owns one immutable source revision and destroys its views when Obsidian replaces it.

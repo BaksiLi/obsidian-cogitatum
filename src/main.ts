@@ -1,7 +1,8 @@
 import { Component, MarkdownRenderChild, MarkdownRenderer, Plugin, type WorkspaceLeaf } from "obsidian";
 import { createBlockView, type BlockView, type BlockViewOptions, type BlockMode } from "@cogitatum/view/block";
 import { editSource, ownerLeaf } from "./edit";
-import { cogitatumEditor } from "./editor";
+import type { EditorView } from "@codemirror/view";
+import { cogitatumEditor, type FenceCursor } from "./editor";
 import { renderSource } from "./source";
 
 declare const __COGITATUM_LOGO__: string;
@@ -12,14 +13,13 @@ export default class CogitatumPlugin extends Plugin {
   private readonly blocks = new Set<InquiryRenderChild>();
   private readonly modes = new WeakMap<WorkspaceLeaf, Map<string, BlockMode>>();
   private opening: Promise<void> = Promise.resolve();
+  // A source editor beside a preview moves its selection as the author's cursor moves.
+  private readonly editors = cogitatumEditor((cursor, view) => {
+    for (const block of this.blocks) block.follow(cursor, view);
+  });
 
   onload(): void {
-    // A source editor beside a preview moves its selection as the author's cursor moves.
-    this.registerEditorExtension(cogitatumEditor(({ path, startLine, line, view }) => {
-      for (const block of this.blocks) {
-        if (block.sourcePath === path && block.fenceStartLine() === startLine && !view.dom.contains(block.containerEl)) block.reveal(line);
-      }
-    }));
+    this.registerEditorExtension(this.editors.extension);
     for (const language of ["cog", "cogitatum"]) {
       this.registerMarkdownCodeBlockProcessor(language, (source, container, context) => {
         const preference = () => {
@@ -34,18 +34,8 @@ export default class CogitatumPlugin extends Plugin {
           renderProse: async ({ text, container, signal }) => {
             if (signal.aborted) return;
             const component = new ProseRenderComponent(signal);
-            const dispose = () => {
-              signal.removeEventListener("abort", dispose);
-              component.dispose();
-            };
-            signal.addEventListener("abort", dispose, { once: true });
-            try {
-              component.load();
-              await MarkdownRenderer.render(this.app, text, container, context.sourcePath, component);
-              return dispose;
-            } catch (error) {
-              dispose(); throw error;
-            }
+            component.load();
+            await MarkdownRenderer.render(this.app, text, container, context.sourcePath, component);
           },
           initialMode: () => { const p = preference(); return p?.modes.get(p.key); },
           onMode: mode => { const p = preference(); p?.modes.set(p.key, mode); },
@@ -55,7 +45,7 @@ export default class CogitatumPlugin extends Plugin {
             this.opening = opening.catch(() => {});
             return opening;
           }
-        }, () => this.blocks.delete(child), () => {
+        }, () => this.blocks.delete(child), this.editors, () => {
           const section = context.getSectionInfo(container);
           return section ? section.lineStart + 2 : undefined;
         });
@@ -72,39 +62,43 @@ export default class CogitatumPlugin extends Plugin {
   }
 }
 
-/** Native postprocessors may continue acquiring resources after their render is cancelled. */
+/**
+ * The view aborts every render it replaces, fails or destroys, so the signal is this component's whole lifetime.
+ * Native postprocessors may continue acquiring resources after that, and receive them already released.
+ */
 class ProseRenderComponent extends Component {
-  private disposed = false;
-
-  constructor(private readonly signal: AbortSignal) { super(); }
+  constructor(private readonly signal: AbortSignal) {
+    super();
+    signal.addEventListener("abort", () => this.unload(), { once: true });
+  }
 
   override register(callback: () => unknown): void {
-    if (this.disposed || this.signal.aborted) callback();
+    if (this.signal.aborted) callback();
     else super.register(callback);
   }
 
   override addChild<T extends Component>(child: T): T {
-    if (this.disposed || this.signal.aborted) { child.unload(); return child; }
+    if (this.signal.aborted) { child.unload(); return child; }
     return super.addChild(child);
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.unload();
   }
 }
 
 class InquiryRenderChild extends MarkdownRenderChild {
   private block?: BlockView;
+  private current?: string;
   private failure?: HTMLElement;
 
-  constructor(container: HTMLElement, readonly sourcePath: string, private readonly source: () => string, private readonly options: BlockViewOptions,
-    private readonly released: () => void, readonly fenceStartLine: () => number | undefined) {
+  constructor(container: HTMLElement, private readonly sourcePath: string, private readonly source: () => string, private readonly options: BlockViewOptions,
+    private readonly released: () => void, private readonly editors: { cursors(): Iterable<[FenceCursor, EditorView]> },
+    private readonly fenceStartLine: () => number | undefined) {
     super(container);
   }
 
-  reveal(line: number): void { this.block?.reveal(line); }
+  /** Reveal a cursor's line if it sits in this block's own fence, in another editor, over this very source. */
+  follow(cursor: FenceCursor, view: EditorView): void {
+    if (this.block && cursor.path === this.sourcePath && cursor.source === this.current
+      && cursor.startLine === this.fenceStartLine() && !view.dom.contains(this.containerEl)) this.block.reveal(cursor.line);
+  }
 
   onload(): void {
     let source: string;
@@ -118,12 +112,15 @@ class InquiryRenderChild extends MarkdownRenderChild {
     }
     this.block = createBlockView(this.containerEl, this.options);
     this.block.element.classList.add("cog-obsidian");
-    this.block.update(source);
+    this.block.update(this.current = source);
+    // A preview rebuilt by an edit starts where the author's cursor already is.
+    for (const [cursor, view] of this.editors.cursors()) this.follow(cursor, view);
   }
 
   onunload(): void {
     this.block?.destroy();
     this.block = undefined;
+    this.current = undefined;
     this.failure?.remove();
     this.failure = undefined;
     this.released();

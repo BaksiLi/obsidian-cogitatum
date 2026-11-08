@@ -152,7 +152,9 @@ try {
         sourcePath: path, docId: id,
         getSectionInfo: () => options.sectionAvailable === false ? null : ({
           text: window.notes.get(path), lineStart: options.lineStart ?? 2,
-          lineEnd: options.lineEnd ?? source.split(/\r\n|\r|\n/).length + 3
+          // Like Obsidian, the section ends at the fence's current closing line.
+          lineEnd: options.lineEnd ?? window.notes.get(path).split(/\r\n|\r|\n/)
+            .findIndex((line, index) => index > (options.lineStart ?? 2) && /^ {0,3}(`{3,}|~{3,})\s*$/.test(line))
         }),
         addChild(child) { window.children.set(id, child); child.load(); }
       };
@@ -754,6 +756,28 @@ try {
     other.dispatch({ selection: { anchor: other.state.doc.line(5).from } });
   });
   assert.notEqual(await follow.locator('.cog-reading-row[data-line="2"]').getAttribute('data-selected'), 'true', 'Another note with the same text does not steer this preview');
+  // Typing rebuilds the preview from the revised note; the new preview still follows the cursor that caused it.
+  const typedSource = await page.evaluate(() => {
+    const view = window.followEditor, line = view.state.doc.line(6);
+    view.dispatch({ changes: { from: line.to, insert: '！' }, selection: { anchor: line.to + 1 } });
+    window.notes.set('follow.md', view.state.doc.toString());
+    return view.state.doc.toString().split('\n').slice(3, 6).join('\n');
+  });
+  await page.evaluate(source => window.rerender('follow', source), typedSource);
+  assert.match(await follow.locator('.cog-reading-row[data-line="3"]').textContent(), /！/);
+  assert.equal(await follow.locator('.cog-reading-row[data-line="3"]').getAttribute('data-selected'), 'true', 'A rebuilt preview follows the cursor in its source');
+  // Until it is rebuilt, a preview does not take line numbers from a revision it has not rendered.
+  const insertedSource = await page.evaluate(() => {
+    const view = window.followEditor, line = view.state.doc.line(5);
+    view.dispatch({ changes: { from: line.from, insert: '  - [G] 新的一步。\n' }, selection: { anchor: line.from + 4 } });
+    window.notes.set('follow.md', view.state.doc.toString());
+    return view.state.doc.toString().split('\n').slice(3, 7).join('\n');
+  });
+  assert.notEqual(await follow.locator('.cog-reading-row[data-line="2"]').getAttribute('data-selected'), 'true', 'A stale preview ignores the newer cursor');
+  await page.evaluate(source => window.rerender('follow', source), insertedSource);
+  assert.match(await follow.locator('.cog-reading-row[data-line="2"]').textContent(), /新的一步/);
+  assert.equal(await follow.locator('.cog-reading-row[data-line="2"]').getAttribute('data-selected'), 'true');
+  await page.evaluate(() => { const view = window.followEditor; view.dispatch({ selection: { anchor: view.state.doc.line(1).from } }); });
   // An indented fence keeps its own columns; a note with no fence costs nothing.
   assert.deepEqual(await page.evaluate(() => window.tokens(window.openEditor('indented.md', 'Text.\n\n   ```cog\n   - [O @x] y `z`.\n   ```')).map(token => token.split('=')[1])),
     ['- ', '[', 'O', '@x', ']', '`z`']);
