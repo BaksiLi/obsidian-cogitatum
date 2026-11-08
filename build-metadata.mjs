@@ -1,10 +1,8 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FORMAT_VERSION } from "@cogitatum/core";
+import { verifyPin } from "./pin.mjs";
 
 const root = new URL("./", import.meta.url);
 const json = path => JSON.parse(readFileSync(new URL(path, root), "utf8"));
@@ -13,34 +11,7 @@ export const plugin = json("manifest.json");
 if (manifest.version !== plugin.version || plugin.id !== "cogitatum") {
   throw new Error("Plugin and package identity must agree.");
 }
-if (!/^[a-f0-9]{40}$/.test(manifest.cogitatumSource?.ref ?? "")) {
-  throw new Error("Pin the full public Core/View source commit in cogitatumSource.ref.");
-}
-
-const require = createRequire(import.meta.url);
-const installed = name => JSON.parse(readFileSync(join(dirname(require.resolve(name)), "../package.json"), "utf8"));
-const packages = {};
-for (const name of ["core", "view"]) {
-  const dependency = manifest.dependencies[`@cogitatum/${name}`];
-  if (!/^file:vendor\/[^/]+\.tgz$/.test(dependency ?? "")) {
-    throw new Error(`@cogitatum/${name} must use a portable vendor tarball.`);
-  }
-  const archive = readFileSync(new URL(dependency.slice(5), root));
-  const digest = createHash("sha256").update(archive).digest("hex");
-  if (manifest.cogitatumSource.sha256?.[name] !== digest) {
-    throw new Error(`@cogitatum/${name} tarball does not match its pinned SHA-256.`);
-  }
-  packages[name] = installed(`@cogitatum/${name}`);
-  if (`file:vendor/cogitatum-${name}-${packages[name].version}.tgz` !== dependency) {
-    throw new Error(`Installed @cogitatum/${name} version differs from its pinned tarball. Run npm ci.`);
-  }
-  const integrity = `sha512-${createHash("sha512").update(archive).digest("base64")}`;
-  for (const lockPath of ["package-lock.json", "node_modules/.package-lock.json"]) {
-    if (json(lockPath).packages?.[`node_modules/@cogitatum/${name}`]?.integrity !== integrity) {
-      throw new Error(`${lockPath} does not match the pinned @cogitatum/${name} tarball. Run npm ci.`);
-    }
-  }
-}
+const { packages } = verifyPin();
 
 let revision = "source archive";
 try {

@@ -74,7 +74,8 @@ Creating the ZIP requires the `zip` command (included with macOS; install it sep
 No command installs the plugin into a vault, publishes a release or modifies notes.
 
 The public Core/View commit and SHA-256 archive digests live in `package.json` under `cogitatumSource`.
-When updating the archives, update that pin and both digests together, then regenerate the lockfile and run `npm ci` before checking.
+To move the pin, run `node scripts/vendor-hosts.mjs <commit> <this checkout>` from a public checkout with matching dependencies.
+It packs that commit in isolation, so rerunning it on the pinned commit reproduces the recorded digests; `pin.mjs` is its verifier.
 Package versions alone do not identify development builds; both archives can retain a version across distinct source commits.
 Version details in the plugin expose the public pin and available standalone Git revision.
 A source archive builds without Git metadata and is labelled accordingly; retain the release ZIP digest when identifying a tested artifact.
