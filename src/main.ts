@@ -1,6 +1,7 @@
 import { Component, MarkdownRenderChild, MarkdownRenderer, Plugin, type WorkspaceLeaf } from "obsidian";
 import { createBlockView, type BlockView, type BlockViewOptions, type BlockMode } from "@cogitatum/view/block";
 import { editSource, ownerLeaf } from "./edit";
+import { cogitatumEditor } from "./editor";
 import { renderSource } from "./source";
 
 declare const __COGITATUM_LOGO__: string;
@@ -13,6 +14,12 @@ export default class CogitatumPlugin extends Plugin {
   private opening: Promise<void> = Promise.resolve();
 
   onload(): void {
+    // A source editor beside a preview moves its selection as the author's cursor moves.
+    this.registerEditorExtension(cogitatumEditor(({ path, startLine, line, view }) => {
+      for (const block of this.blocks) {
+        if (block.sourcePath === path && block.fenceStartLine() === startLine && !view.dom.contains(block.containerEl)) block.reveal(line);
+      }
+    }));
     for (const language of ["cog", "cogitatum"]) {
       this.registerMarkdownCodeBlockProcessor(language, (source, container, context) => {
         const preference = () => {
@@ -21,7 +28,7 @@ export default class CogitatumPlugin extends Plugin {
           if (!this.modes.has(owner)) this.modes.set(owner, new Map());
           return { modes: this.modes.get(owner)!, key: `${context.sourcePath}:${section.lineStart}` };
         };
-        const child = new InquiryRenderChild(container, () => renderSource(source, context.getSectionInfo(container)), {
+        const child = new InquiryRenderChild(container, context.sourcePath, () => renderSource(source, context.getSectionInfo(container)), {
           version: __COGITATUM_VERSION__,
           logo: __COGITATUM_LOGO__,
           renderProse: async ({ text, container, signal }) => {
@@ -48,7 +55,10 @@ export default class CogitatumPlugin extends Plugin {
             this.opening = opening.catch(() => {});
             return opening;
           }
-        }, () => this.blocks.delete(child));
+        }, () => this.blocks.delete(child), () => {
+          const section = context.getSectionInfo(container);
+          return section ? section.lineStart + 2 : undefined;
+        });
         this.blocks.add(child);
         context.addChild(child);
       });
@@ -89,9 +99,12 @@ class InquiryRenderChild extends MarkdownRenderChild {
   private block?: BlockView;
   private failure?: HTMLElement;
 
-  constructor(container: HTMLElement, private readonly source: () => string, private readonly options: BlockViewOptions, private readonly released: () => void) {
+  constructor(container: HTMLElement, readonly sourcePath: string, private readonly source: () => string, private readonly options: BlockViewOptions,
+    private readonly released: () => void, readonly fenceStartLine: () => number | undefined) {
     super(container);
   }
+
+  reveal(line: number): void { this.block?.reveal(line); }
 
   onload(): void {
     let source: string;

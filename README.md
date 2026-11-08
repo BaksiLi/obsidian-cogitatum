@@ -31,6 +31,8 @@ Core compiles each block once; shared View owns reading projection, marks, graph
 The shared `@cogitatum/view/block` shell owns the frame, view switching, diagnostics, selection and expansion.
 The adapter owns theme variables, native source navigation and Obsidian render-child lifecycle.
 Edit reuses an existing source pane without resetting its view state, and preserves the cursor when it is already inside the current fence and no passage is selected.
+In source editors, `cog` fences are colored by Core's lexical tokens through the theme's own syntax classes; Grounds and Objections take the Map's stance colors.
+Moving the cursor inside a fence selects that line's occurrence in the same note's open previews, without taking focus.
 A replaced or destroyed preview cancels its pending navigation before it can select or focus stale source.
 Expand uses the same live views; editing exits the modal before focusing the native editor.
 Each Markdown render child owns one immutable source revision and destroys its views when Obsidian replaces it.
@@ -101,7 +103,7 @@ The package is not published to npm or the Obsidian Community directory.
 
 The browser harness exercises the production bundle with real Core/View and a stand-in for Obsidian registration, native Markdown delegation, editor focus and render-child lifecycle.
 Its copied fixture lives in `tests/fixtures`; tests require no website or private workspace.
-Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map/Strands, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
+Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map/Strands, editor highlighting against real CodeMirror 6, cursor-following previews, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
 Set `COGITATUM_SCREENSHOT_DIR` to retain browser screenshots.
 This harness is not the Obsidian app and does not establish native desktop or mobile behavior.
 Historical native checks from the former integration do not validate this standalone release bundle.

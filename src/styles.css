@@ -13,3 +13,8 @@
   --cog-error: var(--text-error);
   margin-block: 1rem;
 }
+/* Source fences: Core's token kinds take the theme's syntax colors; roles take the Map's stance colors. */
+.cog-token.cog-role-G { color: var(--color-green); }
+.cog-token.cog-role-O { color: var(--color-red); }
+.cog-token-retired { color: var(--text-error); text-decoration: line-through; }
+.cog-token-note { font-style: italic; }

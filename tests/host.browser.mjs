@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
+import { build } from 'esbuild';
 import { explainSource, FORMAT_VERSION } from '@cogitatum/core';
 import { projectReading } from '@cogitatum/view';
 import { version as expectedVersion, logo } from '../build-metadata.mjs';
@@ -38,6 +39,10 @@ try {
     .markdown-rendered ol > li { margin-inline-start:3ch; padding-block:2px; position:relative; }
     </style><main class="markdown-rendered"><p id="ordinary">Ordinary Markdown remains host-owned.</p></main>`);
   await page.addStyleTag({ content: styles });
+  // Obsidian supplies CodeMirror 6 at runtime; the editor extension runs against the real library.
+  const [codemirror] = (await build({ stdin: { contents: 'export * as state from "@codemirror/state"; export * as view from "@codemirror/view";', resolveDir: new URL('..', import.meta.url).pathname },
+    bundle: true, format: 'iife', globalName: 'CodeMirror', write: false, logLevel: 'silent' })).outputFiles;
+  await page.addScriptTag({ content: codemirror.text });
   await page.evaluate(() => {
     window.observers = new Set();
     const NativeObserver = window.ResizeObserver;
@@ -124,8 +129,15 @@ try {
       app = window.app;
       processors = new Map();
       registerMarkdownCodeBlockProcessor(language, callback) { this.processors.set(language, callback); }
+      editorExtensions = [];
+      registerEditorExtension(extension) { this.editorExtensions.push(extension); }
     }
-    window.require = name => { if (name !== 'obsidian') throw Error(`Unexpected runtime dependency: ${name}`); return { Component, Events, Plugin, MarkdownRenderChild, MarkdownRenderer, MarkdownView }; };
+    // Obsidian's editor knows which note it shows; the harness names it when an editor is created.
+    const editorInfoField = window.CodeMirror.state.StateField.define({ create: () => ({ file: { path: window.editorPath } }), update: value => value });
+    window.editorInfoField = editorInfoField;
+    const runtime = { obsidian: { Component, Events, Plugin, MarkdownRenderChild, MarkdownRenderer, MarkdownView, editorInfoField },
+      '@codemirror/state': window.CodeMirror.state, '@codemirror/view': window.CodeMirror.view };
+    window.require = name => { if (!runtime[name]) throw Error(`Unexpected runtime dependency: ${name}`); return runtime[name]; };
     window.module = { exports: {} };
     window.children = new Map();
     window.mount = (id, source, language = 'cog', parent = document.querySelector('main'), options = {}) => {
@@ -708,6 +720,46 @@ try {
   await page.evaluate(() => window.mount('empty', ''));
   assert.equal(await page.locator('#empty').getByRole('tab', { name: 'Map', exact: true }).isDisabled(), true);
 
+  // Source editors color fences with Core's tokens in the theme's own syntax classes, and lead the preview.
+  await page.evaluate(() => {
+    window.openEditor = (path, doc) => {
+      window.editorPath = path;
+      const parent = document.createElement('div'); parent.className = 'cm-test'; document.body.append(parent);
+      const { EditorState } = window.CodeMirror.state, { EditorView } = window.CodeMirror.view;
+      const view = new EditorView({ parent, state: EditorState.create({ doc, extensions: [window.editorInfoField, window.plugin.editorExtensions] }) });
+      (window.editors ??= []).push(view);
+      return view;
+    };
+    window.tokens = view => [...view.dom.querySelectorAll('.cog-token')].map(node => `${node.className.replace(/^cog-token /, '')}=${node.textContent}`);
+  });
+  const followSource = '- [C @nine] 9 不是素數。\n  - [G] 素數只有兩個因數。\n  - [O/ use @nine] 但 9 有三個。';
+  await page.evaluate(source => window.mount('follow', source), followSource);
+  const highlighted = await page.evaluate(() => {
+    const view = window.openEditor('follow.md', window.notes.get('follow.md'));
+    window.followEditor = view;
+    return window.tokens(view);
+  });
+  assert.deepEqual(highlighted.slice(0, 5), ['cog-token-bullet cm-punctuation=- ', 'cog-token-mark cm-keyword=[', 'cog-token-role cm-tag cog-role-C=C',
+    'cog-token-name cm-property=@nine', 'cog-token-mark cm-keyword=]'], 'Core token kinds map to the theme syntax classes');
+  assert.ok(highlighted.includes('cog-token-role cm-tag cog-role-O=O/'));
+  assert.equal(highlighted.some(token => token.includes('Title') || token.includes('After')), false, 'Markdown outside the fence is untouched');
+  const follow = page.locator('#follow');
+  // Source line 6 of the note is the fence's third line.
+  await page.evaluate(() => { const view = window.followEditor; view.dispatch({ selection: { anchor: view.state.doc.line(6).from + 4 } }); });
+  assert.equal(await follow.locator('.cog-reading-row[data-line="3"]').getAttribute('data-selected'), 'true', 'The preview follows the source cursor');
+  await page.evaluate(() => { const view = window.followEditor; view.dispatch({ selection: { anchor: view.state.doc.line(1).from } }); });
+  assert.equal(await follow.locator('.cog-reading-row[data-line="3"]').getAttribute('data-selected'), 'true', 'Leaving the fence keeps the last selection');
+  await page.evaluate(() => {
+    const other = window.openEditor('other.md', window.notes.get('follow.md'));
+    other.dispatch({ selection: { anchor: other.state.doc.line(5).from } });
+  });
+  assert.notEqual(await follow.locator('.cog-reading-row[data-line="2"]').getAttribute('data-selected'), 'true', 'Another note with the same text does not steer this preview');
+  // An indented fence keeps its own columns; a note with no fence costs nothing.
+  assert.deepEqual(await page.evaluate(() => window.tokens(window.openEditor('indented.md', 'Text.\n\n   ```cog\n   - [O @x] y `z`.\n   ```')).map(token => token.split('=')[1])),
+    ['- ', '[', 'O', '@x', ']', '`z`']);
+  assert.deepEqual(await page.evaluate(() => window.tokens(window.openEditor('plain.md', '- [C] Not a fence.\n```js\n- [C] x\n```'))), []);
+  await page.evaluate(() => { for (const view of window.editors.splice(0)) { const parent = view.dom.parentElement; view.destroy(); parent?.remove(); } window.unmount('follow'); });
+
   // A second document models a popout's DOM realm. Disabling the plugin must clean it too.
   await page.evaluate(({ source, styles }) => {
     const frame = document.createElement('iframe'); document.body.append(frame);
@@ -724,5 +776,5 @@ try {
   assert.equal(await page.evaluate(() => window.observers.size), 0);
   assert.equal(await page.locator('#ordinary').textContent(), 'Ordinary Markdown remains host-owned.');
   assert.deepEqual(errors, []);
-  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map/Strands, native editing and focus cancellation, 18 simulated cursor/selection/scroll invalidation cases, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, plain/Shift dragging and settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
+  process.stdout.write('Obsidian browser checks passed: native Markdown delegation, note boundaries, links, component load/unload, abort/late completion, failure fallback, Reading/Map/Strands, native editing and focus cancellation, editor highlighting and cursor-following previews, 18 simulated cursor/selection/scroll invalidation cases, note identity, local occurrences, raw Live Preview/dedented Reading parity, stale callback rejection, fence metadata/indentation, exact trailing blanks, CRLF/Unicode columns, plain/Shift dragging and settling, diagnostics, themes, narrow width, multiple blocks, second document, and unload.\n');
 } finally { await browser.close(); }
