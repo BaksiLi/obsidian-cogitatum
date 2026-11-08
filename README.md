@@ -48,7 +48,7 @@ Snapping guides align marks; Alt places them freely, and reduced motion keeps ne
 
 Requires Node.js 22.12 or newer and npm.
 Core and View are vendored MIT-licensed tarballs; no sibling checkout or private workspace is needed.
-The adapter is versioned independently: Obsidian plugin `0.1.0-alpha.4` uses Core and View `0.6.1` with Format `0.6.0`.
+The adapter is versioned independently: Obsidian plugin `0.1.0-alpha.4` uses Core and View `0.6.2` with Format `0.6.0`.
 Core and View are vendored from the reviewed public source commit recorded in `package.json`; no registry lookup is needed to build.
 This adopts the same shared rendering and interaction implementation used by the Playground.
 
@@ -71,7 +71,7 @@ npm run release
 `test:browser` builds the production bundle before running the browser harness.
 `release` repeats those checks and creates `releases/cogitatum-0.1.0-alpha.4.zip` with `main.js`, `styles.css`, `manifest.json` and `LICENSE` at its root.
 Creating the ZIP requires the `zip` command (included with macOS; install it separately on Linux if needed).
-No command installs the plugin into a vault, publishes a release or modifies notes.
+No local command installs the plugin into a vault, publishes a release or modifies notes.
 
 The public Core/View commit and SHA-256 archive digests live in `package.json` under `cogitatumSource`.
 To move the pin, run `node scripts/vendor-hosts.mjs <commit> <this checkout>` from a public checkout with matching dependencies.
@@ -99,9 +99,11 @@ The designer's square PNG is for plugin listings; this adapter's toolbar uses th
 
 ## Local installation and evidence
 
-Extract the release ZIP into `.obsidian/plugins/cogitatum` in a test vault, enable Cogitatum in Community plugins, and reload it after replacing files.
-Alternatively, copy `dist/main.js`, `dist/styles.css` and `dist/manifest.json` there.
-The package is not published to npm or the Obsidian Community directory.
+Alpha builds are GitHub pre-releases tagged with the manifest version, such as `0.1.0-alpha.4`.
+Install one with [BRAT](https://github.com/TfTHacker/obsidian42-brat) from `BaksiLi/obsidian-cogitatum`, or extract its ZIP into `.obsidian/plugins/cogitatum` and enable Cogitatum in Community plugins.
+Reload the plugin after replacing files; a local build can be installed the same way from `dist/main.js`, `dist/styles.css` and `dist/manifest.json`.
+The plugin is not yet in the Obsidian Community directory, which accepts only `x.y.z` versions.
+Pushing a version tag runs the release workflow, which repeats `npm run release` and attaches those three files and the ZIP.
 
 The browser harness exercises the production bundle with real Core/View and a stand-in for Obsidian registration, native Markdown delegation, editor focus and render-child lifecycle.
 Its copied fixture lives in `tests/fixtures`; tests require no website or private workspace.
