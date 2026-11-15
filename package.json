@@ -28,10 +28,10 @@
   },
   "cogitatumSource": {
     "repository": "BaksiLi/cogitatum",
-    "ref": "1fe5f37ab6219abf8e3cc2654ea8de24640083c0",
+    "ref": "d079b9489de396501aa42005fcdd502d55bbaa63",
     "sha256": {
-      "core": "84c0c9b67a4bc2a3c681ca9c40ded7c746617079b0dac1dd5758c619bd4e0f2b",
-      "view": "0d194479ca28282691297687018a367a4fbeb9a4fe956e15bdb30becb435d0a3"
+      "core": "bdfbf2775412e3906ebe0997185ca7bcbdb86d227008bfe203557fc8c3bfa68b",
+      "view": "6c6cb51aac21e79c282dcccf8c35daeac461056ef5fd1688f1f86c13851fcd1c"
     }
   }
 }

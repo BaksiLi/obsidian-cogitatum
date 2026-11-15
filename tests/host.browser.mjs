@@ -733,6 +733,83 @@ try {
     await page.evaluate(() => window.unmount('contextual'));
   }
 
+
+  {
+    const selectorSource = [
+      '- [. @shared] Shared material.', '- [C @claim] Claim.',
+      '  - [G; @step] Reason.', '    - [C/] Claim selector.',
+      '    - [./] Material selector.', '    - [./ use @shared] Neutral selector use.',
+      '    - [C/ use @shared] Claim selector use.', '    - [./run.sh] Body.',
+      '- [C @focus] Focus.', '  - [. @entailed] Entailed material.',
+      '- [_ @entailed +> @focus; @witness] Stronger relation.',
+    ].join('\n');
+    const selectorProjection = prepareView(selectorSource);
+    assert.deepEqual(selectorProjection.diagnostics, []);
+    await page.evaluate(source => window.mount('selectors', source), selectorSource);
+    const block = page.locator('#selectors');
+    for (const line of [4, 5, 6, 7]) {
+      await block.locator(`.cog-reading-row[data-line="${line}"] .cog-reading-select`).click();
+      assert.match(await block.locator('.cog-reading-inspection').textContent(), /concerns @step/);
+    }
+    assert.equal(await block.locator('[data-line="8"]').getAttribute('data-kind'), 'body');
+    assert.equal(await block.locator('[data-line="10"]').getAttribute('data-entailed'), 'true');
+    assert.equal(await block.locator('[data-line="10"]').isVisible(), true, 'entailed concerns stay visible');
+    await block.locator('[data-line="10"] .cog-reading-select').click();
+    assert.match(await block.locator('.cog-reading-inspection').textContent(), /concerns @focus/);
+    await page.evaluate(() => window.unmount('selectors'));
+  }
+
+  {
+    const relatedSource = [
+      '- [C @claim] Claim.', '- [G @ground] Reason.',
+      '- [_ @ground +> @missing; @broken] Rejected route.',
+      '- [O -> @broken; @pressure] Direct dependent.',
+      '- [Q ~> @pressure] Transitive dependent.', '- [node @p]x',
+    ].join('\n');
+    const diagnostics = prepareView(relatedSource).diagnostics;
+    assert.equal(diagnostics.length, 3);
+    const rejectedIndex = diagnostics.findIndex(item => item.code === 'UNKNOWN_TARGET');
+    assert.deepEqual(diagnostics[rejectedIndex].related.map(item => item.sourceSpan.startLine), [4, 5]);
+    assert.ok(diagnostics.some(item => item.related?.some(related => related.code)), 'the fixture includes coded companion diagnostics');
+    await page.evaluate(source => window.mount('related', source), relatedSource);
+    const block = page.locator('#related');
+    await block.locator('.cog-block-issues').click();
+    const roots = block.locator('.cog-reading-diagnostics > ul > li');
+    assert.equal(await roots.count(), diagnostics.length, 'related locations do not create root diagnostics');
+    for (const [index, diagnostic] of diagnostics.entries()) {
+      const root = roots.nth(index);
+      assert.ok((await root.textContent()).includes(diagnostic.message));
+      const related = root.locator('.cog-reading-diagnostic-related > li');
+      assert.equal(await related.count(), diagnostic.related?.length ?? 0);
+      const targets = [
+        [root.locator(':scope > .cog-reading-diagnostic-source'), diagnostic.sourceSpan],
+        ...(diagnostic.related ?? []).map((item, n) => [related.nth(n).getByRole('button', { name: 'Source', exact: true }), item.sourceSpan]),
+      ];
+      for (const [button, span] of targets) {
+        const before = await page.evaluate(() => window.editorEvents.length);
+        await button.click();
+        await page.waitForFunction(count => window.editorEvents.length > count, before);
+        assert.deepEqual(await page.evaluate(() => window.editorEvents.at(-1)), {
+          path: 'related.md',
+          from: { line: span.startLine + 2, ch: span.startColumn - 1 },
+          to: { line: span.endLine + 2, ch: span.endColumn - 1 },
+        }, 'root, direct, transitive and coded related controls select their exact native spans');
+      }
+      for (const [n, item] of (diagnostic.related ?? []).entries()) {
+        const text = await related.nth(n).textContent();
+        assert.ok(text.includes(item.message));
+        if (item.code) assert.ok(text.includes(item.code));
+      }
+    }
+    const transitive = roots.nth(rejectedIndex).locator('.cog-reading-diagnostic-related > li').nth(1).getByRole('button', { name: 'Source', exact: true });
+    await page.evaluate(() => window.notes.set('related.md', 'Externally changed.'));
+    const before = await page.evaluate(() => window.editorEvents.length);
+    await transitive.click();
+    assert.equal(await page.evaluate(() => window.editorEvents.length), before, 'stale related navigation is rejected');
+    assert.match(await block.getByRole('status').textContent(), /changed/);
+    await page.evaluate(() => window.unmount('related'));
+  }
+
   // Diagnostics and text remain inspectable; authored markup never becomes HTML.
   const broken = '- [C] <img src=x onerror=alert(1)>\n- [Z] Broken mark.\n- [. use @nowhere] Dangling.\n';
   await page.evaluate(source => window.mount('broken', source), broken);
