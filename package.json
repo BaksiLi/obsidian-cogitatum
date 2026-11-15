@@ -12,8 +12,8 @@
     "release": "npm run check && npm run test:browser && node release.mjs"
   },
   "dependencies": {
-    "@cogitatum/core": "file:vendor/cogitatum-core-0.6.2.tgz",
-    "@cogitatum/view": "file:vendor/cogitatum-view-0.6.2.tgz"
+    "@cogitatum/core": "file:vendor/cogitatum-core-0.7.0.tgz",
+    "@cogitatum/view": "file:vendor/cogitatum-view-0.7.0.tgz"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
@@ -28,10 +28,10 @@
   },
   "cogitatumSource": {
     "repository": "BaksiLi/cogitatum",
-    "ref": "a55b7d53fc1b6bb1df3ec6005078378ea8a444e5",
+    "ref": "1fe5f37ab6219abf8e3cc2654ea8de24640083c0",
     "sha256": {
-      "core": "1d5787ea36f69eca390be1581e9b36682eeb6afbc80f74cd6e7e1602feac3865",
-      "view": "698cb138dd63b870ac83ae40f05e3b4fdc888660286e12ddd90ebc69eaf2b637"
+      "core": "84c0c9b67a4bc2a3c681ca9c40ded7c746617079b0dac1dd5758c619bd4e0f2b",
+      "view": "0d194479ca28282691297687018a367a4fbeb9a4fe956e15bdb30becb435d0a3"
     }
   }
 }

@@ -48,14 +48,20 @@ Snapping guides align marks; Alt places them freely, and reduced motion keeps ne
 
 Requires Node.js 22.12 or newer and npm.
 Core and View are vendored MIT-licensed tarballs; no sibling checkout or private workspace is needed.
-The adapter is versioned independently: Obsidian plugin `0.1.0-alpha.4` uses Core and View `0.6.2` with Format `0.6.0`.
+This checkout targets the unreleased Core, View and Format `0.7.0`.
+The published Obsidian plugin `0.1.0-alpha.4` remains on Core/View `0.6.2` and Format `0.6.0`; the adapter is versioned independently.
 Core and View are vendored from the reviewed public source commit recorded in `package.json`; no registry lookup is needed to build.
 This adopts the same shared rendering and interaction implementation used by the Playground.
+Core's DOM-free `@cogitatum/core/host` entry owns source occurrences, framing, commitments and diagnostics.
+The shared View shell consumes that projection; this adapter owns Obsidian's editor and lifecycle.
 
 Retained 0.5 notes require source migration before recompilation.
 Replace `[linked]` with `[_ +> ^]` and make its direct sources neutral declarations or uses.
 Replace `/>` with `-> ^/` when challenging the locally exposed step, and named `repliesTo` with `respondsTo`.
-A Claim below a Question needs an explicit `answers` clause when it is intended as an answer.
+Review retained 0.6 source before recompiling with 0.7.
+A Claim below a Question now offers a candidate answer; a Ground there records relevance with its support target still unstated.
+Nested Claims and neutral Points record `concerns`. Distinctions use `interprets`, replacing retired `clarifies`, and `by example` qualifies supports.
+Local use marks determine the context, independently of the referenced declaration.
 See the [complete migration reference](https://onesimos.org/docs/syntax#from-published-05); the adapter never rewrites notes automatically.
 
 ```sh
@@ -108,6 +114,7 @@ Pushing a version tag runs the release workflow, which repeats `npm run release`
 The browser harness exercises the production bundle with real Core/View and a stand-in for Obsidian registration, native Markdown delegation, editor focus and render-child lifecycle.
 Its copied fixture lives in `tests/fixtures`; tests require no website or private workspace.
 Coverage includes literal note boundaries, relative links, invalid/raw fallback, pending/late native resource cleanup, exact local source occurrences, Reading/Map/Strands, editor highlighting against real CodeMirror 6, cursor-following previews, expanded editing, queued/cancelled focus, synchronous cursor/selection/scroll callback invalidation, note identity, stale source guards, raw Live Preview/dedented Reading parity, fence metadata/indentation/trailing blanks, CRLF and Unicode columns, pointer dragging and settling, diagnostics, themes, narrow panes, multiple blocks, a second document and plugin unload.
+The 0.7 fixture checks contextual answers and relevance, unbound Ground suggestions, example support, interpretation, and neutral local-use focus and navigation against `prepareView`.
 Set `COGITATUM_SCREENSHOT_DIR` to retain browser screenshots.
 This harness is not the Obsidian app and does not establish native desktop or mobile behavior.
 Historical native checks from the former integration do not validate this standalone release bundle.

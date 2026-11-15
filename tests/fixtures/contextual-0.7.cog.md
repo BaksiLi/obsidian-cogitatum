@@ -1,0 +1,8 @@
+- [Q @question] 選哪條路😀？
+  - [C @candidate] 候選答案。
+  - [G @unbound] 相關資料，支持對象仍未指定。
+- [C @claim] 主張。
+  - [G @case by example] 一個例子。
+  - [D @distinction] 區分。
+- [. use @question] 以中性點再次呈現問題。
+  - [G @reason] 這次依據局部用法提供支持。

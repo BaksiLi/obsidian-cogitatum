@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { build } from 'esbuild';
 import { explainSource, FORMAT_VERSION } from '@cogitatum/core';
-import { projectReading } from '@cogitatum/view';
+import { prepareView } from '@cogitatum/core/host';
 import { version as expectedVersion, logo } from '../build-metadata.mjs';
 
 const json = path => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -16,7 +16,15 @@ const bundle = readFileSync(new URL('../dist/main.js', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('../dist/styles.css', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./fixtures/reading-view.cog.md', import.meta.url), 'utf8');
 const cjk = '- [C] 9 不是素數。\n  - [_ +> ^]\n    - [.] 素數是大於 1，且正因數只有 1 和自身的自然數。\n    - [.] 9 可以被 3 整除，而 3 既不是 1，也不是 9。\n';
-assert.equal(FORMAT_VERSION, '0.6.0');
+const contextualSource = readFileSync(new URL('./fixtures/contextual-0.7.cog.md', import.meta.url), 'utf8');
+const contextual = prepareView(contextualSource);
+assert.deepEqual(contextual.units[0].graph.bearings.map(item => [item.kind, item.profile]), [
+  ['answers', undefined], ['concerns', undefined], ['supports', 'example'], ['interprets', undefined], ['supports', undefined]
+]);
+assert.deepEqual(contextual.diagnostics.map(item => [item.code, item.severity]), [['UNBOUND_GROUND_UNDER_QUESTION', 'suggestion']]);
+assert.equal(contextual.units[0].graph.bearings.at(-1).target.key,
+  contextual.units[0].graph.points.find(item => item.id === 'question').key, 'The neutral local use controls focus independently of its Question declaration');
+assert.equal(FORMAT_VERSION, '0.7.0');
 for (const fixture of [source, cjk]) assert.deepEqual(explainSource(fixture, 'document').diagnostics, []);
 const shots = process.env.COGITATUM_SCREENSHOT_DIR;
 if (shots) mkdirSync(shots, { recursive: true });
@@ -447,7 +455,7 @@ try {
     const noteText = content => '# Title' + eol + eol + indent + fence + info + eol
       + content.split(/\r\n|\n/).map(line => indent + line).join(eol) + eol + indent + fence + eol + eol + 'After.';
     const note = noteText(callbackSource);
-    const reading = projectReading(callbackSource, explainSource(callbackSource, 'document'));
+    const reading = prepareView(callbackSource);
     const occurrence = reading.units[0].occurrences.find(occurrence => occurrence.line === 3);
     const span = occurrence.sourceSpan;
     assert.equal(occurrence.references[0].kind, 'uses');
@@ -693,6 +701,38 @@ try {
   if (shots) await page.screenshot({ path: `${shots}/obsidian-mobile.png` });
   await page.evaluate(() => window.unmount('chinese'));
 
+  {
+    // The production adapter presents the same 0.7 decisions as Core's host boundary.
+    await page.evaluate(source => window.mount('contextual', source), contextualSource);
+    const contextualBlock = page.locator('#contextual');
+    for (const [line, expected] of [
+      [2, /candidate answer.*answers @question/],
+      [3, /support target unstated.*placement records relevance.*concerns @question/],
+      [5, /supports by example @claim/],
+      [6, /interprets @claim/],
+      [8, /supports @question/]
+    ]) {
+      await contextualBlock.locator(`.cog-reading-row[data-line="${line}"] .cog-reading-select`).click();
+      assert.match(await contextualBlock.locator('.cog-reading-inspection').textContent(), expected);
+    }
+    assert.equal(await contextualBlock.locator('[data-line="3"] .cog-reading-diagnostic').getAttribute('data-severity'), 'suggestion');
+    assert.equal(await contextualBlock.locator('[data-line="7"] .cog-reading-select .cog-glyph-letter').count(), 0, 'A neutral use does not inherit its declaration mark');
+    const localUse = contextual.units[0].occurrences.find(item => item.line === 7).sourceSpan;
+    const contextualEdits = await page.evaluate(() => window.editorEvents.length);
+    await contextualBlock.locator('.cog-reading-row[data-line="7"]').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(count => window.editorEvents.length > count, contextualEdits);
+    assert.deepEqual(await page.evaluate(() => window.editorEvents.at(-1)), {
+      path: 'contextual.md',
+      from: { line: localUse.startLine + 2, ch: localUse.startColumn - 1 },
+      to: { line: localUse.endLine + 2, ch: localUse.endColumn - 1 }
+    }, 'Native source navigation keeps the local neutral use, not the Question declaration');
+    await contextualBlock.getByRole('tab', { name: 'Map', exact: true }).click();
+    const example = contextual.units[0].graph.bearings.find(item => item.profile === 'example');
+    assert.match(await contextualBlock.locator(`g[data-node="bearing:${example.key}"] > title`).textContent(), /supports by example/);
+    await page.evaluate(() => window.unmount('contextual'));
+  }
+
   // Diagnostics and text remain inspectable; authored markup never becomes HTML.
   const broken = '- [C] <img src=x onerror=alert(1)>\n- [Z] Broken mark.\n- [. use @nowhere] Dangling.\n';
   await page.evaluate(source => window.mount('broken', source), broken);
@@ -700,7 +740,7 @@ try {
   assert.equal(await brokenBlock.locator('img').count(), 0);
   await brokenBlock.locator('.cog-block-issues').click();
   assert.equal(await brokenBlock.locator('.cog-reading-diagnostics').getAttribute('open'), '');
-  const diagnostic = projectReading(broken, explainSource(broken, 'document')).diagnostics.find(item => item.sourceSpan);
+  const diagnostic = prepareView(broken).diagnostics.find(item => item.sourceSpan);
   const diagnosticSource = brokenBlock.locator('.cog-reading-diagnostic-source').first();
   await diagnosticSource.click();
   assert.deepEqual(await page.evaluate(() => window.editorEvents.at(-1)), {
