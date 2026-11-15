@@ -1,7 +1,7 @@
 {
   "id": "cogitatum",
   "name": "Cogitatum",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "minAppVersion": "1.5.0",
   "description": "Render explicitly marked inquiry structure in Obsidian Reading view.",
   "author": "Project Cogitatum",
