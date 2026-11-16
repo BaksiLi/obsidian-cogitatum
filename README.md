@@ -65,6 +65,7 @@ Local use marks determine the context, independently of the referenced declarati
 Selectors `C/` and `./` concern the local Bearing, including neutral local uses.
 The diagnostic disclosure shows each root issue with all related locations; each Source action opens that exact span.
 Relevance already entailed by a stronger stated relation remains visible in Reading.
+Map and Strands use shared `mapContext`: entailed relevance is quiet and remains selectable; roles with unstated targets have open stubs in Map.
 See the [complete migration reference](https://onesimos.org/docs/syntax#from-published-05); the adapter never rewrites notes automatically.
 
 ```sh
@@ -85,6 +86,9 @@ No local command installs the plugin into a vault, publishes a release or modifi
 The public Core/View commit and SHA-256 archive digests live in `package.json` under `cogitatumSource`.
 To move the pin, run `node scripts/vendor-hosts.mjs <commit> <this checkout>` from a public checkout with matching dependencies.
 It packs that commit in isolation, so rerunning it on the pinned commit reproduces the recorded digests; `pin.mjs` is its verifier.
+The same operation copies the canonical `examples/host-showcase.cog.md` to `tests/fixtures/host-showcase.cog.md`; `pin.mjs` checks its recorded checksum too.
+All three editor hosts and the website test this source. Native notes can be exported from the public checkout with `node scripts/host-showcase.mjs obsidian`; it prints to stdout and never writes to a vault.
+Existing hand-edited showcases and installed builds remain independent; this test pin does not update them automatically.
 Package versions alone do not identify development builds; both archives can retain a version across distinct source commits.
 Version details in the plugin expose the public pin and available standalone Git revision.
 A source archive builds without Git metadata and is labelled accordingly; retain the release ZIP digest when identifying a tested artifact.

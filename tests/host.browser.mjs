@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { build } from 'esbuild';
 import { explainSource, FORMAT_VERSION } from '@cogitatum/core';
 import { prepareView } from '@cogitatum/core/host';
+import { mapContext } from '@cogitatum/view';
 import { version as expectedVersion, logo } from '../build-metadata.mjs';
 
 const json = path => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -733,6 +734,76 @@ try {
     await page.evaluate(() => window.unmount('contextual'));
   }
 
+
+  {
+    const source = readFileSync(new URL('./fixtures/host-showcase.cog.md', import.meta.url), 'utf8');
+    const unit = prepareView(source).units[0], context = mapContext(unit);
+    assert.equal(unit.graph.points.length, 9);
+    assert.equal(unit.graph.bearings.length, 5, 'Awaiting roles add no Bearings');
+    assert.ok(unit.graph.bearings.every(bearing => ['position', 'name'].includes(bearing.targetBy) && !('derivedBy' in bearing)));
+    assert.deepEqual([...new Set(unit.graph.bearings.map(bearing => bearing.targetBy))].sort(), ['name', 'position']);
+    assert.equal(context.quiet.length, 1);
+    assert.deepEqual(context.awaiting.map(item => item.awaits), ['challenges', 'supports']);
+    const quietRef = context.quiet[0];
+    const commitment = unit.commitments.find(item => item.bearing?.key === quietRef.key);
+    const occurrence = unit.occurrences.find(item => item.id === commitment.occurrenceId);
+    const use = unit.occurrences.find(item => item.references.some(ref => ref.kind === 'uses' && ref.name === 'context'));
+    const support = unit.commitments.find(item => item.occurrenceId === use.id);
+    assert.equal(unit.graph.bearings.find(bearing => bearing.key === support.bearing.key).targetBy, 'name');
+    await page.evaluate(source => window.mount('showcase', source), source);
+    const block = page.locator('#showcase');
+    const row = block.locator(`.cog-reading-row[data-line="${occurrence.line}"]`);
+    assert.equal(await row.getAttribute('data-entailed'), 'true');
+    await row.locator('.cog-reading-select').click();
+    assert.equal(await row.getAttribute('data-selected'), 'true');
+    await block.getByRole('tab', { name: 'Map', exact: true }).click();
+    await frames();
+    assert.equal(await block.locator('.cog-graph .point').count(), unit.graph.points.length);
+    assert.equal(await block.locator('.cog-graph .bearing').count(), unit.graph.bearings.length);
+    assert.equal(await block.locator('.cog-await').count(), context.awaiting.length);
+    assert.equal(await block.locator('.cog-await[data-bearing], .cog-await [data-node]').count(), 0, 'Open stubs are not selectable relations');
+    for (const { point, awaits } of context.awaiting) {
+      assert.match(await block.locator(`[data-node="point:${point.key}"]`).getAttribute('aria-label'), new RegExp(`target unstated for ${awaits}`));
+    }
+    const quiet = block.locator(`.cog-node.cog-quiet[data-node="bearing:${quietRef.key}"]`);
+    assert.equal(await quiet.count(), 1);
+    await quiet.focus(); await page.keyboard.press('Escape');
+    await block.getByRole('tab', { name: 'Map', exact: true }).focus();
+    await page.mouse.move(0, 0);
+    await page.waitForFunction(() => {
+      const link = document.querySelector('#showcase .cog-graph[data-guided="false"] .cog-link.cog-quiet');
+      const opacity = link && Number(getComputedStyle(link).opacity);
+      return opacity > 0 && opacity < 1;
+    });
+    const opacity = await block.locator('.cog-link.cog-quiet').first().evaluate(node => Number(getComputedStyle(node).opacity));
+    assert.ok(opacity > 0 && opacity < 1, 'Quiet relevance remains drawn');
+    await quiet.focus(); await page.keyboard.press('Space');
+    await quiet.and(block.locator('[aria-pressed="true"]')).waitFor({ state: 'attached' });
+    assert.equal(await quiet.getAttribute('aria-pressed'), 'true', 'Quiet relevance remains keyboard selectable');
+    const before = await page.evaluate(() => window.editorEvents.length);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(count => window.editorEvents.length > count, before);
+    const span = occurrence.sourceSpan;
+    assert.deepEqual(await page.evaluate(() => window.editorEvents.at(-1)), {
+      path: 'showcase.md', from: { line: span.startLine + 2, ch: span.startColumn - 1 },
+      to: { line: span.endLine + 2, ch: span.endColumn - 1 }
+    }, 'A quiet Bearing still navigates to its authored occurrence');
+    await block.getByRole('tab', { name: 'Strands', exact: true }).click();
+    const knot = block.locator(`.cog-strands [data-quiet="true"][data-bearing="${quietRef.key}"]`);
+    assert.equal(await knot.count(), 1);
+    await knot.locator('.cog-strands-kind').click();
+    assert.equal(await knot.getAttribute('data-selected'), 'true');
+    const revised = source.split('\n').filter((_, index) => index + 1 !== use.line).join('\n');
+    await page.evaluate(({ source, revised }) => {
+      window.notes.set('showcase.md', window.notes.get('showcase.md').replace(source, revised));
+      window.rerender('showcase', revised);
+    }, { source, revised });
+    await block.getByRole('tab', { name: 'Map', exact: true }).click();
+    await block.locator('.cog-await').nth(1).waitFor({ state: 'attached' });
+    assert.equal(await block.locator('.cog-quiet').count(), 0, 'Removing the stronger relation restores ordinary relevance');
+    assert.equal(await block.locator('.cog-await').count(), 2);
+    await page.evaluate(() => window.unmount('showcase'));
+  }
 
   {
     const selectorSource = [

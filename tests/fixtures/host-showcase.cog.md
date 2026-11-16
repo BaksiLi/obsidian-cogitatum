@@ -1,0 +1,11 @@
+- [C @claim] 這座橋可以重新開放。
+  - [. @context] 檢查員週一到訪。
+  - [G use @context +> @claim] 這次將同一點作為根據。
+- [O @objection] 橋底尚未受檢。
+- [Q @question] 何時恢復通行？
+  - [C @candidate] 明天。
+  - [G @unbound] 尖峰交通量很大，支持對象仍未指定。
+- [C @joint-claim] 9 不是質數。
+  - [_ +> ^; @joint]
+    - [. @divides] 9 可以被 3 整除。
+    - [. @definition] 質數只有 1 和自身兩個正因數。

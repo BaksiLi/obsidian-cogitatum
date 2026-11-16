@@ -14,6 +14,10 @@ export function verifyPin(root = new URL("./", import.meta.url)) {
   if (!/^[a-f0-9]{40}$/.test(manifest.cogitatumSource?.ref ?? "")) {
     throw new Error("Pin the full public Core/View source commit in cogitatumSource.ref.");
   }
+  const showcase = readFileSync(new URL("tests/fixtures/host-showcase.cog.md", root));
+  if (manifest.cogitatumSource.sha256?.showcase !== createHash("sha256").update(showcase).digest("hex")) {
+    throw new Error("The shared host showcase does not match its pinned SHA-256; re-vendor the reviewed source.");
+  }
   const require = createRequire(new URL("package.json", root));
   const packages = {};
   for (const name of ["core", "view"]) {
